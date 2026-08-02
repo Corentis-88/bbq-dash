@@ -5,6 +5,7 @@
   const LEVEL_MS = 30_000;
   const MAX_QUEUE = 5;
   const TAU = Math.PI * 2;
+  const MOBILE_COVER_POSITION_Y = 0.45;
 
   const LEVELS = [
     { name: "Back-garden basics", subcopy: "Keep the first plates happy.", capacity: 6, cookMs: 9_000, supplyMs: 4_800, queueMs: 6_600 },
@@ -510,6 +511,15 @@
     unlockAudio();
     const point = pointerPosition(event);
     const hit = hitFood(point);
+    if (state.scene.cover && state.tray.length > 0 && (hit?.source === "tray" || pointInRect(point, judeTouchRect()) || pointInRect(point, trayRect()))) {
+      const slotIndex = firstEmptyGrillSlot();
+      if (slotIndex >= 0) {
+        loadTrayToGrill(hit?.source === "tray" ? hit.food : state.tray[0], slotIndex);
+      } else {
+        showToast("Make space on the grill for Jude's food.", "!");
+      }
+      return;
+    }
     if (!hit) return;
     state.dragging = { source: hit.source, food: hit.food, index: hit.index, x: point.x, y: point.y, start: point };
     state.hintDismissed = true;
@@ -544,7 +554,7 @@
       return;
     }
 
-    if (pointInRect(point, passTarget().rect)) {
+    if (pointInRect(point, passTarget().interactionRect)) {
       startServing(dragging.food, dragging.start);
     } else {
       showToast("Drop cooked food into the pass box.", "🍽");
@@ -563,7 +573,7 @@
       const drawnWidth = state.scene.width * scale;
       const drawnHeight = state.scene.height * scale;
       const offsetX = (rect.width - drawnWidth) * 0.5;
-      const offsetY = (rect.height - drawnHeight) * 0.64;
+      const offsetY = (rect.height - drawnHeight) * MOBILE_COVER_POSITION_Y;
       return { x: (event.clientX - rect.left - offsetX) / scale, y: (event.clientY - rect.top - offsetY) / scale };
     }
     return { x: (event.clientX - rect.left) / rect.width * state.scene.width, y: (event.clientY - rect.top) / rect.height * state.scene.height };
@@ -574,7 +584,7 @@
       if (pointInRect(point, trayFoodRect(index))) return { source: "tray", food: state.tray[index], index };
     }
     for (let index = state.grill.length - 1; index >= 0; index -= 1) {
-      const rect = getSlotRect(index);
+      const rect = grillDragRect(index);
       if (pointInRect(point, rect)) return { source: "grill", food: state.grill[index], index };
     }
     return null;
@@ -584,6 +594,13 @@
     for (let index = 0; index < currentLevel().capacity; index += 1) {
       const rect = getSlotRect(index);
       if (pointInRect(point, rect) && !state.grill[index]) return index;
+    }
+    return -1;
+  }
+
+  function firstEmptyGrillSlot() {
+    for (let index = 0; index < currentLevel().capacity; index += 1) {
+      if (!state.grill[index]) return index;
     }
     return -1;
   }
@@ -599,8 +616,19 @@
     return { x, y, w: width, h: height, center: { x: x + width / 2, y: y + height / 2 } };
   }
 
+  function grillDragRect(index) {
+    return state.scene.cover ? expandRect(getSlotRect(index), 12) : getSlotRect(index);
+  }
+
   function trayRect() {
     return state.scene.mobile ? { x: 44, y: 792, w: 305, h: 110 } : { x: 83, y: 525, w: 190, h: 105 };
+  }
+
+  function judeTouchRect() {
+    const target = judeTarget();
+    return state.scene.mobile
+      ? { x: target.x - 105, y: target.y - 30, w: 215, h: 250 }
+      : { x: state.jude.x - 28, y: target.y - 22, w: 180, h: 250 };
   }
 
   function trayFoodCenter(index) {
@@ -623,7 +651,8 @@
 
   function passTarget() {
     const rect = { x: 925, y: 230, w: 240, h: 140 };
-    return { rect, center: { x: rect.x + rect.w * 0.5, y: rect.y + rect.h * 0.5 } };
+    const interactionRect = state.scene.cover ? expandRect(rect, 24) : rect;
+    return { rect, interactionRect, center: { x: rect.x + rect.w * 0.5, y: rect.y + rect.h * 0.5 } };
   }
 
   function plateTarget() {
@@ -1337,6 +1366,7 @@
   function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
   function easeInOut(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
   function pointInRect(point, rect) { return point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h; }
+  function expandRect(rect, padX, padY = padX) { return { x: rect.x - padX, y: rect.y - padY, w: rect.w + padX * 2, h: rect.h + padY * 2 }; }
 
   function drawCoverImage(image, x, y, w, h, focusX, focusY, radius) {
     if (!image.complete || !image.naturalWidth) return;
