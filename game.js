@@ -215,6 +215,8 @@
       order: template.order,
       color: template.color,
       mood: "waiting",
+      waitMs: 0,
+      agitation: 0,
       bob: Math.random() * TAU
     });
   }
@@ -242,23 +244,30 @@
     announce(line);
   }
 
+  function supplyBatchSize() {
+    return state.levelIndex === 0 && state.elapsed < LEVEL_MS * 0.67 ? 1 : 2;
+  }
+
   function addTrayFood() {
     if (state.tray.length > 0) return null;
-    const food = createFood(Math.random() > 0.48 ? "burger" : "sausage");
-    state.tray.push(food);
+    const batchSize = supplyBatchSize();
+    for (let index = 0; index < batchSize; index += 1) {
+      state.tray.push(createFood(Math.random() > 0.48 ? "burger" : "sausage"));
+    }
     state.supplyPending = false;
     state.jude.waiting = false;
     state.jude.departing = 0;
     state.jude.speechIndex = (state.jude.speechIndex + 1) % JUDE_DIALOGUE.length;
     sayJude(JUDE_DIALOGUE[state.jude.speechIndex]);
     spawnBurst(judeTarget().x + 40, judeTarget().y + 12, "supply");
-    announce("Jude has arrived with more food. Drag it onto an empty grill slot.");
-    return food;
+    announce(`Jude has arrived with ${batchSize === 2 ? "two items" : "more food"}. Drag each onto an empty grill slot.`);
+    return state.tray[0];
   }
 
   function trySupply() {
     if (state.tray.length > 0) return;
-    if (state.grill.length >= currentLevel().capacity) {
+    const batchSize = supplyBatchSize();
+    if (state.grill.length + batchSize > currentLevel().capacity) {
       state.supplyPending = true;
       state.jude.waiting = true;
       state.jude.speechTimer = 0;
@@ -292,6 +301,13 @@
     });
     if (state.flip > 0) state.flip = Math.max(0, state.flip - delta / 700);
     state.tray.forEach((food) => { food.spawn = Math.min(1, food.spawn + delta / 300); });
+
+    state.queue.forEach((customer) => {
+      if (state.exitCustomer?.customer.id === customer.id) return;
+      customer.waitMs += delta;
+      customer.agitation = clamp(customer.waitMs / (level.queueMs * 2.35), 0, 1);
+      customer.mood = customer.agitation > 0.72 ? "angry" : customer.agitation > 0.36 ? "restless" : "waiting";
+    });
 
     if (state.tray.length === 0 && !state.jude.waiting && state.supplyAccumulator >= level.supplyMs) {
       state.supplyAccumulator = 0;
@@ -408,7 +424,6 @@
 
   function getResult(food, customer) {
     const cookState = getCookState(food);
-    if (food.kind !== customer.order) return { state: "wrong", points: -6, good: false, icon: "×", text: "Wrong plate!", toast: `${customer.name} asked for a ${customer.order}. −6` };
     if (cookState === "perfect") return { state: "perfect", points: 10, good: true, icon: "♥", text: "Perfect!", toast: `${customer.name} is delighted! +10` };
     if (cookState === "underdone") return { state: "underdone", points: -5, good: false, icon: "~", text: "Still pink!", toast: `${customer.name} says it needs more time. −5` };
     return { state: "overdone", points: -8, good: false, icon: "♨", text: "Too smoky!", toast: `${customer.name} says it is charcoal. −8` };
@@ -427,7 +442,7 @@
     spawnBurst(start.x, start.y, "flip");
     playTone(result.good ? 480 : 170, result.good ? 0.12 : 0.16, result.good ? "triangle" : "sawtooth");
     announce(`Sending ${food.kind} into the pass box for ${customer.name}.`);
-    if (state.supplyPending && state.grill.length < currentLevel().capacity) {
+    if (state.supplyPending && state.grill.length + supplyBatchSize() <= currentLevel().capacity) {
       state.supplyPending = false;
       state.jude.waiting = false;
       addTrayFood();
@@ -449,7 +464,7 @@
     if (!delivery) return;
     const { result, customer } = delivery;
     if (state.queue[0]) state.queue[0].mood = result.good ? "happy" : "angry";
-    state.exitCustomer = { customer, result, t: 0 };
+    state.exitCustomer = { customer, result, foodKind: delivery.food.kind, t: 0 };
     state.score += result.points;
     state.served += 1;
     if (result.good) {
@@ -478,7 +493,7 @@
     state.grill.push(food);
     food.ageMs = 0;
     food.spawn = 0;
-    state.jude.departing = 1;
+    state.jude.departing = state.tray.length === 0 ? 1 : 0;
     state.jude.waiting = false;
     state.supplyAccumulator = 0;
     state.hintDismissed = true;
@@ -555,7 +570,9 @@
   }
 
   function hitFood(point) {
-    if (state.tray[0] && pointInRect(point, trayRect())) return { source: "tray", food: state.tray[0], index: 0 };
+    for (let index = state.tray.length - 1; index >= 0; index -= 1) {
+      if (pointInRect(point, trayFoodRect(index))) return { source: "tray", food: state.tray[index], index };
+    }
     for (let index = state.grill.length - 1; index >= 0; index -= 1) {
       const rect = getSlotRect(index);
       if (pointInRect(point, rect)) return { source: "grill", food: state.grill[index], index };
@@ -584,6 +601,20 @@
 
   function trayRect() {
     return state.scene.mobile ? { x: 44, y: 792, w: 305, h: 110 } : { x: 83, y: 525, w: 190, h: 105 };
+  }
+
+  function trayFoodCenter(index) {
+    const count = state.tray.length;
+    const gap = count > 1 ? 28 : 0;
+    return {
+      x: state.jude.x + (state.scene.mobile ? 64 : 76) + (index - (count - 1) / 2) * gap,
+      y: judeTarget().y + 74
+    };
+  }
+
+  function trayFoodRect(index) {
+    const center = trayFoodCenter(index);
+    return { x: center.x - 28, y: center.y - 30, w: 56, h: 60 };
   }
 
   function grillBounds() {
@@ -831,17 +862,21 @@
     ctx.lineWidth = 9;
     ctx.beginPath(); ctx.moveTo(x + 27, y + 73); ctx.lineTo(x - 8, y + 103); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x + 81, y + 72); ctx.lineTo(x + 108, y + 89); ctx.stroke();
-    const tray = trayRect();
     if (state.tray.length > 0) {
       const trayX = mobile ? x + 64 : x + 76;
       const trayY = y + 91;
+      const itemGap = state.tray.length > 1 ? 28 : 0;
+      const trayWidth = state.tray.length > 1 ? 124 : 90;
       ctx.save();
       ctx.translate(trayX, trayY + Math.sin(state.time / 200) * 2);
       ctx.rotate(-0.06);
-      fillRoundRect(-44, -11, 90, 18, 8, "#f5db9b");
-      strokeRoundRect(-44, -11, 90, 18, 8, "#9b5d3d", 2);
+      fillRoundRect(-trayWidth / 2, -11, trayWidth, 18, 8, "#f5db9b");
+      strokeRoundRect(-trayWidth / 2, -11, trayWidth, 18, 8, "#9b5d3d", 2);
       ctx.restore();
-      drawFood(state.tray[0].kind, trayX, trayY - 17, 40, "perfect", state.time);
+      state.tray.forEach((food, index) => {
+        const itemX = trayX + (index - (state.tray.length - 1) / 2) * itemGap;
+        drawFood(food.kind, itemX, trayY - 17, state.tray.length > 1 ? 34 : 40, "perfect", state.time + food.wobble);
+      });
     }
     ctx.fillStyle = waiting ? "#ffe0a0" : "#f6efda";
     ctx.font = "950 9px Trebuchet MS, sans-serif";
@@ -861,7 +896,7 @@
       const exitDirection = state.exitCustomer?.result.good ? 1 : -1;
       const exitX = baseX + exitDirection * exitT * (state.scene.mobile ? 135 : 180);
       drawCustomer(front, exitX, plate.center.y - 82, true, 1.1);
-      drawPlate(plate.center.x, plate.center.y, front.order, true);
+      drawPlate(plate.center.x, plate.center.y, state.exitCustomer?.foodKind || null, true, Boolean(state.exitCustomer), front.agitation);
     }
     const behind = state.queue.slice(1);
     behind.forEach((customer, index) => {
@@ -869,7 +904,7 @@
         ? { x: 70 + index * 130, y: 159 + (index % 2) * 22 }
         : { x: 1095 + index * 52, y: 475 + (index % 2) * 14 };
       drawCustomer(customer, p.x, p.y, false, customer.group === "child" ? 0.72 : customer.group === "teen" ? 0.83 : 0.92);
-      drawPlate(p.x + 27, p.y + 63, customer.order, false);
+      drawPlate(p.x + 27, p.y + 63, null, false, false, customer.agitation);
     });
 
     ctx.save();
@@ -901,7 +936,8 @@
   function drawCustomer(customer, x, y, front, scale) {
     const size = 48 * scale;
     const bob = Math.sin(state.time / 350 + customer.bob) * (front ? 2.8 : 1.6);
-    const shake = customer.mood === "angry" ? Math.sin(state.time / 48) * 2.5 : 0;
+    const agitation = customer.agitation || 0;
+    const shake = customer.mood === "angry" ? Math.sin(state.time / 48) * (2.5 + agitation * 2.5) : customer.mood === "restless" ? Math.sin(state.time / 85) * 1.5 : 0;
     ctx.save();
     ctx.translate(x + shake, y + bob);
     drawShadow(0, 64 * scale, 32 * scale, 7 * scale, "rgba(13, 34, 24, 0.25)");
@@ -918,8 +954,14 @@
     ctx.strokeStyle = customer.mood === "angry" ? "#9c4b42" : "#704236";
     ctx.lineWidth = 2 * scale;
     ctx.beginPath();
-    if (customer.mood === "happy") { ctx.arc(0, 22 * scale, 7 * scale, 0, Math.PI); } else if (customer.mood === "angry") { ctx.moveTo(-7 * scale, 25 * scale); ctx.lineTo(7 * scale, 21 * scale); } else { ctx.moveTo(-5 * scale, 24 * scale); ctx.lineTo(5 * scale, 24 * scale); }
+    if (customer.mood === "happy") { ctx.arc(0, 22 * scale, 7 * scale, 0, Math.PI); } else if (customer.mood === "angry") { ctx.moveTo(-7 * scale, 25 * scale); ctx.lineTo(7 * scale, 21 * scale); } else if (customer.mood === "restless") { ctx.moveTo(-6 * scale, 24 * scale); ctx.lineTo(6 * scale, 22 * scale); } else { ctx.moveTo(-5 * scale, 24 * scale); ctx.lineTo(5 * scale, 24 * scale); }
     ctx.stroke();
+    if (agitation > 0.36) {
+      ctx.fillStyle = agitation > 0.72 ? "#ff9a62" : "#ffd36a";
+      ctx.font = `950 ${Math.max(10, 15 * scale)}px Trebuchet MS, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText(agitation > 0.72 ? "!" : "…", 28 * scale, -10 * scale);
+    }
     if (front) {
       ctx.fillStyle = "rgba(251, 243, 223, 0.9)";
       ctx.font = "950 9px Trebuchet MS, sans-serif";
@@ -931,15 +973,22 @@
     ctx.restore();
   }
 
-  function drawPlate(x, y, order, front) {
+  function drawPlate(x, y, foodKind, front, filled = false, agitation = 0) {
     ctx.save();
     ctx.fillStyle = "rgba(13, 34, 24, 0.24)";
     ctx.beginPath(); ctx.ellipse(x, y + 5, front ? 39 : 21, front ? 12 : 7, 0, 0, TAU); ctx.fill();
     ctx.fillStyle = "#f8ecd1";
-    ctx.strokeStyle = front ? "#d2ed62" : "rgba(247, 241, 223, 0.55)";
+    ctx.strokeStyle = front ? "#d2ed62" : agitation > 0.72 ? "#ff9a62" : agitation > 0.36 ? "#ffd36a" : "rgba(247, 241, 223, 0.55)";
     ctx.lineWidth = front ? 3 : 2;
     ctx.beginPath(); ctx.ellipse(x, y, front ? 37 : 20, front ? 11 : 6, 0, 0, TAU); ctx.fill(); ctx.stroke();
-    drawFood(order, x, y - (front ? 9 : 5), front ? 34 : 20, "perfect", state.time);
+    if (filled && foodKind) {
+      drawFood(foodKind, x, y - (front ? 9 : 5), front ? 34 : 20, "perfect", state.time);
+    } else {
+      ctx.fillStyle = front ? "rgba(23, 56, 42, 0.7)" : "rgba(23, 56, 42, 0.55)";
+      ctx.font = `950 ${front ? 8 : 6}px Trebuchet MS, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText(front ? "PLATE READY" : "PLATE", x, y + (front ? 3 : 2));
+    }
     ctx.restore();
   }
 
@@ -1166,9 +1215,9 @@
 
   function renderQueueRibbon() {
     els.queueRibbon.innerHTML = state.queue.map((person, index) => `
-      <div class="queue-person ${index === 0 ? "front" : ""}">
+      <div class="queue-person ${index === 0 ? "front" : ""} mood-${person.mood}">
         <span class="person-face" style="background:${person.color}" aria-hidden="true">${person.avatar}</span>
-        <span class="queue-person-copy"><strong>${person.name}</strong><small>${person.group}</small><span class="queue-order">${person.order === "burger" ? "🍔" : "🌭"} ${person.order}</span></span>
+        <span class="queue-person-copy"><strong>${person.name}</strong><small>${person.group} · ${person.agitation > 0.72 ? "impatient" : person.agitation > 0.36 ? "getting restless" : "waiting"}</small><span class="queue-order">PLATE READY</span></span>
         <span class="queue-plate" aria-hidden="true">🍽</span>
       </div>`).join("");
   }

@@ -268,6 +268,8 @@ button:focus-visible, canvas:focus-visible {
 }
 
 .queue-person.front { border-color: rgba(210, 237, 98, 0.6); background: rgba(210, 237, 98, 0.14); transform: translateY(-3px); }
+.queue-person.mood-restless { border-color: rgba(255, 211, 106, 0.55); background: rgba(255, 211, 106, 0.1); }
+.queue-person.mood-angry { border-color: rgba(255, 154, 98, 0.68); background: rgba(255, 154, 98, 0.14); animation: impatient-shake 420ms ease-in-out infinite; }
 .queue-person .person-face { display: grid; width: 34px; height: 34px; place-items: center; border: 2px solid rgba(247, 241, 223, 0.65); border-radius: 12px 12px 12px 4px; font-size: 18px; }
 .queue-person-copy { min-width: 0; display: grid; gap: 3px; }
 .queue-person-copy strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
@@ -415,6 +417,7 @@ button:focus-visible, canvas:focus-visible {
 .accessibility-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 
 @keyframes pulse { 0%,100% { transform: scale(0.82); opacity: 0.7; } 50% { transform: scale(1.1); opacity: 1; } }
+@keyframes impatient-shake { 0%,100% { transform: translateX(0); } 50% { transform: translateX(2px); } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modal-in { from { opacity: 0; transform: translateY(13px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
