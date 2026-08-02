@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#101a19" />
+    <meta name="description" content="BBQ Dash — a fast, animated grill game about cooking, flipping and serving." />
+    <title>BBQ Dash — Cook, flip, serve</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script defer src="game.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="game-hud">
+        <div class="game-logo" aria-label="BBQ Dash">
+          <span class="logo-flame" aria-hidden="true">♨</span>
+          <span class="logo-words"><b>BBQ</b><strong>DASH</strong><small>BACK-GARDEN GRILL</small></span>
+        </div>
+
+        <div class="level-hud">
+          <div class="level-badge"><span>LEVEL</span><strong id="levelValue">1</strong></div>
+          <div class="level-copy"><strong id="levelName">Back-garden basics</strong><span id="levelSubcopy">Keep the first plates happy.</span></div>
+        </div>
+
+        <div class="hud-actions">
+          <div class="hud-stat score-stat"><span>SCORE</span><strong id="scoreValue">0</strong></div>
+          <div class="hud-stat timer-stat"><span>TIME</span><strong id="timeValue">1:30</strong></div>
+          <button class="hud-button" id="pauseButton" type="button" aria-label="Pause game">Ⅱ</button>
+          <button class="hud-button" id="helpButton" type="button" aria-label="How to play">?</button>
+        </div>
+      </header>
+
+      <main>
+        <section class="game-stage-section" aria-labelledby="stageTitle">
+          <h1 class="sr-only" id="stageTitle">Animated BBQ Dash game</h1>
+          <div class="stage-frame" id="stageFrame">
+            <canvas id="gameCanvas" width="1280" height="720" tabindex="0" aria-label="BBQ Dash playfield. Drag food from the grill into the rectangular pass box, then watch it drop to the front customer's plate."></canvas>
+            <div class="stage-topline">
+              <div class="live-pill"><i></i><span id="liveText">LIVE SERVICE</span></div>
+              <div class="combo-pill" id="comboPill">COMBO x0</div>
+            </div>
+            <div class="drag-hint" id="dragHint"><span>↗</span><strong>DRAG TO PASS</strong><small>Drop cooked food into the pass box</small></div>
+            <div class="stage-bottomline">
+              <span id="stageMessage">Cook until green, then use the pass box.</span>
+              <span class="best-score">BEST <b id="bestValue">0</b></span>
+            </div>
+          </div>
+          <div class="accessibility-status" id="gameStatus" role="status" aria-live="polite"></div>
+        </section>
+
+        <section class="queue-strip" aria-labelledby="queueTitle">
+          <div class="queue-strip-heading">
+            <div>
+              <span class="eyebrow">THE PASS</span>
+              <h2 id="queueTitle">Hungry people</h2>
+            </div>
+          <div class="queue-strip-note"><span class="plate-symbol" aria-hidden="true">🍽</span><span>Pass box → front plate</span></div>
+          </div>
+          <div class="queue-ribbon" id="queueRibbon"></div>
+        </section>
+      </main>
+
+      <footer class="game-footer">
+        <span>BBQ DASH</span>
+        <span>Cook · Flip · Serve</span>
+        <span>Drag food to the plate · tap pause any time</span>
+      </footer>
+    </div>
+
+    <div class="modal-backdrop" id="startOverlay" role="dialog" aria-modal="true" aria-labelledby="startTitle">
+      <div class="modal-card start-card">
+        <div class="modal-illustration"><span class="illustration-sun">☀</span><span class="illustration-smoke smoke-one"></span><span class="illustration-smoke smoke-two"></span><span class="illustration-grill">♨</span></div>
+        <span class="eyebrow">BASIC INSTRUCTIONS · DAVE &amp; JUDE'S BBQ</span>
+        <h2 id="startTitle">The queue is here.<br /><em>Fire up the grill.</em></h2>
+        <p>Cook the food, drop it into the rectangular pass box, and watch it land on the waiting customer's plate. Green is perfect. Jude is bringing more.</p>
+        <div class="start-rules">
+          <span><b>1</b><strong>Load</strong><small>Tray → BBQ</small></span>
+          <span><b>2</b><strong>Cook</strong><small>Wait for green</small></span>
+          <span><b>3</b><strong>Pass</strong><small>Drop in the box</small></span>
+          <span><b>4</b><strong>Serve</strong><small>It drops to a plate</small></span>
+        </div>
+        <button class="start-button" id="startButton" type="button">START SERVICE <span>↗</span></button>
+        <small class="modal-note">3 levels · 90 seconds · touch and mouse ready</small>
+      </div>
+    </div>
+
+    <div class="modal-backdrop hidden" id="helpOverlay" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <div class="modal-card help-card">
+        <button class="modal-close" id="closeHelpButton" type="button" aria-label="Close how to play">×</button>
+        <span class="eyebrow">QUICK BRIEFING</span>
+        <h2 id="helpTitle">How to work the pass</h2>
+        <div class="help-list">
+          <div><b>01</b><p><strong>Load the BBQ.</strong> Drag Jude's tray onto an empty grill spot.</p></div>
+          <div><b>02</b><p><strong>Look for green.</strong> Cook until the meter says FLIP NOW for +10.</p></div>
+          <div><b>03</b><p><strong>Use the pass box.</strong> Drag cooked food into the separate rectangle beside the BBQ.</p></div>
+          <div><b>04</b><p><strong>Keep a spot open.</strong> When Jude arrives to a full grill, she waits — loudly.</p></div>
+        </div>
+        <button class="start-button compact" id="closeHelpButtonBottom" type="button">BACK TO SERVICE</button>
+      </div>
+    </div>
+
+    <div class="modal-backdrop hidden" id="pauseOverlay" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+      <div class="modal-card pause-card">
+        <span class="eyebrow">SERVICE PAUSED</span>
+        <h2 id="pauseTitle">The coals can wait.</h2>
+        <p>Dave is keeping an eye on everything while you take a breather.</p>
+        <button class="start-button compact" id="resumeButton" type="button">RESUME SERVICE <span>↗</span></button>
+      </div>
+    </div>
+
+    <div class="modal-backdrop hidden" id="gameOverOverlay" role="dialog" aria-modal="true" aria-labelledby="gameOverTitle">
+      <div class="modal-card end-card">
+        <span class="eyebrow" id="endEyebrow">THE SUN HAS SET</span>
+        <h2 id="gameOverTitle">Service is over.</h2>
+        <p id="endSummary">The last plate has gone out into the garden.</p>
+        <div class="final-score"><span>FINAL SCORE</span><strong id="finalScore">0</strong></div>
+        <div class="final-stats"><span><b id="finalPerfect">0</b> perfect plates</span><span><b id="finalUnhappy">0</b> unhappy plates</span></div>
+        <button class="start-button compact" id="playAgainButton" type="button">RUN IT AGAIN <span>↗</span></button>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"><span id="toastIcon">✦</span><strong id="toastText">Nice flip!</strong></div>
+
+    <div class="orientation-overlay hidden" id="orientationOverlay" role="status" aria-live="polite">
+      <div class="orientation-card">
+        <span class="orientation-icon">↻</span>
+        <strong>Turn your phone sideways</strong>
+        <small>BBQ Dash is built as a landscape cooking game.</small>
+      </div>
+    </div>
+  </body>
+</html>
