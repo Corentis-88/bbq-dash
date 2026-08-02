@@ -442,8 +442,8 @@ button:focus-visible, canvas:focus-visible {
   .hud-stat { min-width: 58px; }
   .hud-stat strong { font-size: 18px; }
   .game-main { padding-top: 8px; }
-  .stage-frame { height: calc(100dvh - 86px); min-height: 250px; }
-  #gameCanvas { height: 100%; min-height: 0; object-fit: fill; }
+  .stage-frame { height: calc(100svh - 86px); min-height: 250px; }
+  #gameCanvas { width: 100%; height: 100%; min-height: 0; object-fit: cover; object-position: center 64%; }
   .queue-strip { display: none; }
   .queue-strip { margin-top: 8px; padding: 11px 14px 9px; }
   .queue-strip-heading { align-items: center; }

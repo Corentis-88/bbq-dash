@@ -128,7 +128,7 @@
       jude: { x: -150, waiting: false, departing: 0, step: 0, speechIndex: 0, speechTimer: 0, speechVisible: 0, speechText: "" },
       banner: null,
       hintDismissed: false,
-      scene: { width: 1280, height: 720, mobile: false, portrait: false, dpr: 1 },
+      scene: { width: 1280, height: 720, mobile: false, portrait: false, cover: false, dpr: 1 },
       orientationPaused: false,
       time: 0,
       lastAnnouncement: ""
@@ -159,6 +159,7 @@
     const portrait = window.innerHeight > window.innerWidth && window.innerWidth < 900;
     state.scene.mobile = false;
     state.scene.portrait = portrait;
+    state.scene.cover = !portrait && window.innerWidth < 900;
     state.scene.width = 1280;
     state.scene.height = 720;
     state.scene.dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -542,6 +543,14 @@
 
   function pointerPosition(event) {
     const rect = els.canvas.getBoundingClientRect();
+    if (state.scene.cover) {
+      const scale = Math.max(rect.width / state.scene.width, rect.height / state.scene.height);
+      const drawnWidth = state.scene.width * scale;
+      const drawnHeight = state.scene.height * scale;
+      const offsetX = (rect.width - drawnWidth) * 0.5;
+      const offsetY = (rect.height - drawnHeight) * 0.64;
+      return { x: (event.clientX - rect.left - offsetX) / scale, y: (event.clientY - rect.top - offsetY) / scale };
+    }
     return { x: (event.clientX - rect.left) / rect.width * state.scene.width, y: (event.clientY - rect.top) / rect.height * state.scene.height };
   }
 
